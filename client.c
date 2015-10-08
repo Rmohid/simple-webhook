@@ -11,7 +11,7 @@
 #define PORT        8181		/* Port number as an integer - web server default is 80 */
 #define IP_ADDRESS "127.0.0.1"	/* IP Address as a string */
 
-char *command = "GET /index.html HTTP/1.0 \r\n\r\n" ;
+char *command = "GET /AF2BE4/mykey HTTP/1.0 \r\n\r\n" ;
 /* Note: spaces are delimiters and VERY important */
 
 #define BUFSIZE 8196
@@ -41,10 +41,13 @@ static struct sockaddr_in serv_addr;
 		pexit("connect() failed");
 
 	/* Now the sockfd can be used to communicate to the server the GET request */
-	printf("Send bytes=%d %s\n",strlen(command), command);
+	printf("Client sent bytes=%d %s\nResponse:\n",strlen(command), command);
 	write(sockfd, command, strlen(command));
 
 	/* This displays the raw HTML file (if index.html) as received by the browser */
-	while( (i=read(sockfd,buffer,BUFSIZE)) > 0)
+	while( (i=read(sockfd,buffer,BUFSIZE)) > 0){
 		write(1,buffer,i);
+        }
+        return(0);
 }
+

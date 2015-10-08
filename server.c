@@ -1,3 +1,5 @@
+// Based on server by Nigel Griffiths (nag@uk.ibm.com),
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -9,33 +11,37 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#define VERSION 23
+#define VERSION 1
 #define BUFSIZE 8096
 #define ERROR      42
 #define LOG        44
 #define FORBIDDEN 403
 #define NOTFOUND  404
+#define TOKEN     AF2BE4
+#define PORT      12345
+#define MAX_TRIGGER 32
+#define MAX_CALLBACK 256
+#define NUM_TRIGGERS 100
 
 // OSX req'd
 #ifndef SIGCLD
 # define SIGCLD SIGCHLD
 #endif
 
+#define xstr(a) str(a)
+#define str(a) #a
+
+enum APP_KEYS {KEY_TOKEN,KEY_PORT,KEY_LAST};
+
+char *settings [] = {
+	[KEY_TOKEN]=xstr(TOKEN),  
+	[KEY_PORT]=xstr(PORT),  
+	[KEY_LAST]=NULL };
+
 struct {
-	char *ext;
-	char *filetype;
-} extensions [] = {
-	{"gif", "image/gif" },  
-	{"jpg", "image/jpg" }, 
-	{"jpeg","image/jpeg"},
-	{"png", "image/png" },  
-	{"ico", "image/ico" },  
-	{"zip", "image/zip" },  
-	{"gz",  "image/gz"  },  
-	{"tar", "image/tar" },  
-	{"htm", "text/html" },  
-	{"html","text/html" },  
-	{0,0} };
+	char trigger[MAX_TRIGGER];
+	char callback[MAX_CALLBACK];
+} triggers [NUM_TRIGGERS];
 
 void logger(int type, char *s1, char *s2, int socket_fd)
 {
@@ -56,7 +62,7 @@ void logger(int type, char *s1, char *s2, int socket_fd)
 	case LOG: (void)sprintf(logbuffer," INFO: %s:%s:%d",s1, s2,socket_fd); break;
 	}	
 	/* No checks here, nothing can be done with a failure anyway */
-	if((fd = open("nweb.log", O_CREAT| O_WRONLY | O_APPEND,0644)) >= 0) {
+	if((fd = open("web.log", O_CREAT| O_WRONLY | O_APPEND,0644)) >= 0) {
 		(void)write(fd,logbuffer,strlen(logbuffer)); 
 		(void)write(fd,"\n",1);      
 		(void)close(fd);
@@ -69,62 +75,74 @@ void web(int fd, int hit)
 {
 	int j, file_fd, buflen;
 	long i, ret, len;
-	char * fstr;
+	char * fstr = "text/plain";
+        char *idx, *key, *value = NULL;
 	static char buffer[BUFSIZE+1]; /* static so zero filled */
 
 	ret =read(fd,buffer,BUFSIZE); 	/* read Web request in one go */
 	if(ret == 0 || ret == -1) {	/* read failure stop now */
 		logger(FORBIDDEN,"failed to read browser request","",fd);
 	}
+
 	if(ret > 0 && ret < BUFSIZE)	/* return code is valid chars */
 		buffer[ret]=0;		/* terminate the buffer */
 	else buffer[0]=0;
-	for(i=0;i<ret;i++)	/* remove CF and LF characters */
+
+	for(i=0;i<ret;i++)	        /* remove CF and LF characters */
 		if(buffer[i] == '\r' || buffer[i] == '\n')
 			buffer[i]='*';
+
 	logger(LOG,"request",buffer,hit);
-	if( strncmp(buffer,"GET ",4) && strncmp(buffer,"get ",4) ) {
+
+        idx = buffer;
+	if( strncmp(idx,"GET ",4) && strncmp(idx,"get ",4) ) {
 		logger(FORBIDDEN,"Only simple GET operation supported",buffer,fd);
 	}
-	for(i=4;i<BUFSIZE;i++) { /* null terminate after the second space to ignore extra stuff */
-		if(buffer[i] == ' ') { /* string is "GET URL " +lots of other stuff */
+
+                                        /* check for token .. */
+        idx += 5;
+	if( strncmp(idx,settings[KEY_TOKEN],strlen(settings[KEY_TOKEN]))){ 
+                logger(FORBIDDEN,"Invalid token",idx,fd);
+        }
+
+                                        /* Get key and null previous slash */
+        idx += strlen(settings[KEY_TOKEN]);
+        key = idx + 1; 
+
+        if(!key){
+                logger(ERROR,"No key",buffer,fd);
+        }
+	logger(LOG,"key:",key,hit);
+
+	for(i=key-buffer;i<BUFSIZE;i++) { /* null terminate after next slash */
+		if(buffer[i] == '/' ) {
+			buffer[i] = 0;
+                        value = &buffer[i + 1];
+		}
+		if(buffer[i] == ' ') { /* Ignore rest of url, string is "GET URL " +lots of other stuff */
 			buffer[i] = 0;
 			break;
 		}
 	}
-	for(j=0;j<i-1;j++) 	/* check for illegal parent directory use .. */
-		if(buffer[j] == '.' && buffer[j+1] == '.') {
-			logger(FORBIDDEN,"Parent directory (..) path names not supported",buffer,fd);
-		}
-	if( !strncmp(&buffer[0],"GET /\0",6) || !strncmp(&buffer[0],"get /\0",6) ) /* convert no filename to index file */
-		(void)strcpy(buffer,"GET /index.html");
+        if(value){ /* registering a new trigger, save and echo it back */
+        }
 
-	/* work out the file type and check we support it */
-	buflen=strlen(buffer);
-	fstr = (char *)0;
-	for(i=0;extensions[i].ext != 0;i++) {
-		len = strlen(extensions[i].ext);
-		if( !strncmp(&buffer[buflen-len], extensions[i].ext, len)) {
-			fstr =extensions[i].filetype;
-			break;
-		}
-	}
-	if(fstr == 0) logger(FORBIDDEN,"file extension type not supported",buffer,fd);
+        len = 5;
 
-	if(( file_fd = open(&buffer[5],O_RDONLY)) == -1) {  /* open the file for reading */
-		logger(NOTFOUND, "failed to open file",&buffer[5],fd);
-	}
-	logger(LOG,"SEND",&buffer[5],hit);
-	len = (long)lseek(file_fd, (off_t)0, SEEK_END); /* lseek to the file end to find the length */
-	      (void)lseek(file_fd, (off_t)0, SEEK_SET); /* lseek back to the file start ready for reading */
-          (void)sprintf(buffer,"HTTP/1.1 200 OK\nServer: nweb/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", VERSION, len, fstr); /* Header + a blank line */
+
+        (void)sprintf(buffer,"HTTP/1.1 200 OK\nServer: server/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", 
+              VERSION, len, fstr); /* Header + a blank line */
+
 	logger(LOG,"Header",buffer,hit);
+	(void)write(fd,buffer,strlen(buffer));
+        strcpy(buffer,"test\n");
 	(void)write(fd,buffer,strlen(buffer));
 
 	/* send file in 8KB block - last block may be smaller */
-	while (	(ret = read(file_fd, buffer, BUFSIZE)) > 0 ) {
-		(void)write(fd,buffer,ret);
-	}
+	//while (	(ret = read(file_fd, buffer, BUFSIZE)) > 0 ) {
+	//	(void)write(fd,buffer,ret);
+	//}
+
 	sleep(1);	/* allow socket to drain before signalling the socket is closed */
 	close(fd);
 	exit(1);
@@ -138,26 +156,17 @@ int main(int argc, char **argv)
 	static struct sockaddr_in serv_addr; /* static = initialised to zeros */
 
 	if( argc < 3  || argc > 3 || !strcmp(argv[1], "-?") ) {
-		(void)printf("hint: nweb Port-Number Top-Directory\t\tversion %d\n\n"
-	"\tnweb is a small and very safe mini web server\n"
-	"\tnweb only servers out file/web pages with extensions named below\n"
-	"\t and only from the named directory or its sub-directories.\n"
+		(void)printf("hint: server Port-Number Top-Directory\t\tversion %d\n\n"
+	"\tserver is a small and very safe mini web server\n"
 	"\tThere is no fancy features = safe and secure.\n\n"
-	"\tExample: nweb 8181 /home/nwebdir &\n\n"
-	"\tOnly Supports:", VERSION);
-		for(i=0;extensions[i].ext != 0;i++)
-			(void)printf(" %s",extensions[i].ext);
-
-		(void)printf("\n\tNot Supported: URLs including \"..\", Java, Javascript, CGI\n"
-	"\tNot Supported: directories / /etc /bin /lib /tmp /usr /dev /sbin \n"
-	"\tNo warranty given or implied\n\tNigel Griffiths nag@uk.ibm.com\n"  );
+	"\tExample: server 8181 /home/serverdir &\n\n", VERSION);
 		exit(0);
 	}
 	if( !strncmp(argv[2],"/"   ,2 ) || !strncmp(argv[2],"/etc", 5 ) ||
 	    !strncmp(argv[2],"/bin",5 ) || !strncmp(argv[2],"/lib", 5 ) ||
 	    !strncmp(argv[2],"/tmp",5 ) || !strncmp(argv[2],"/usr", 5 ) ||
 	    !strncmp(argv[2],"/dev",5 ) || !strncmp(argv[2],"/sbin",6) ){
-		(void)printf("ERROR: Bad top directory %s, see nweb -?\n",argv[2]);
+		(void)printf("ERROR: Bad top directory %s, see server -?\n",argv[2]);
 		exit(3);
 	}
 	if(chdir(argv[2]) == -1){ 
@@ -172,7 +181,7 @@ int main(int argc, char **argv)
 	for(i=0;i<32;i++)
 		(void)close(i);		/* close open files */
 	(void)setpgrp();		/* break away from process group */
-	logger(LOG,"nweb starting",argv[1],getpid());
+	logger(LOG,"server starting",argv[1],getpid());
 	/* setup the network socket */
 	if((listenfd = socket(AF_INET, SOCK_STREAM,0)) <0)
 		logger(ERROR, "system call","socket",0);

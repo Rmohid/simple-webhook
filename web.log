@@ -1,0 +1,10 @@
+ INFO: server starting:8181:99631
+ INFO: request:GET /AF2BE4/mykey HTTP/1.0 ****:1
+ INFO: key::mykey HTTP/1.0 ****:1
+ INFO: Header:HTTP/1.1 200 OK
+Server: server/1.0
+Content-Length: 5
+Connection: close
+Content-Type: text/plain
+
+:1
