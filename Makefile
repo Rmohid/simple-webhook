@@ -11,10 +11,10 @@ client: client.o $(OBJECTS)
 	gcc client.o $(OBJECTS) -o bin/$@
 
 server: server.o $(OBJECTS)
-	gcc -g server.o $(OBJECTS) -o bin/$@
+	gcc -g server.o $(OBJECTS) -o bin/webhook
 
 run: kill
-	./bin/server 8181 $(SPATH) &  sleep 1
+	./bin/webhook 8181 $(SPATH) &  sleep 1
 test:
 	./bin/client BF2BE4 script1 
 	./bin/client AF2BE4 script1
@@ -26,9 +26,10 @@ test:
 	./bin/client AF2BE4 "ls -l"
 	cat $(SPATH)/web.log
 kill:
-	ps a | grep "/bin/server 8181" | grep -v grep | cut -f1 -d' ' | xargs -t kill
-clean:
-	-rm -f $(SPATH)/*.log
-	-rm -f *.o
-	-rm -f bin/*
+	ps a | grep "/bin/webhook 8181" | grep -v grep | cut -f1 -d' ' | xargs -t kill
+
+clean: kill
+	rm -f $(SPATH)/*.log
+	rm -f *.o
+	find bin/ -type f| grep -v script |xargs rm
 
