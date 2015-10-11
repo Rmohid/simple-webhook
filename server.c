@@ -169,7 +169,9 @@ void web(int fd, int hit, char *shmp)
          VERSION, len, fstr); /* Header + a blank line */
 
    for(ret = strlen(buffer); ret>0; ret -= write(fd,buffer,strlen(buffer)));
-   (void)sprintf(buffer," * Key=%s value=%s length=%ld\n\n",key,value,len);
+   (void)sprintf(buffer,"./%s",value);
+   ret =system(buffer);
+   (void)sprintf(buffer," %s, exit with %d\n\n",value,(int)ret);
    for(ret = strlen(buffer); ret>0; ret -= write(fd,buffer,strlen(buffer)));
 
    sleep(1);	/* allow socket to drain before signalling the socket is closed */
@@ -214,9 +216,10 @@ int main(int argc, char **argv)
       (void)close(i);		          /* close open files */
    (void)setpgrp();	                  /* break away from process group */
 #endif
+   logger(LOG,"server starting",argv[1],getpid());
 
    /* Allocate a shared memory segment to store the dictionary */
-   if ((key = ftok(argv[0], 'R')) == -1)  /*Here the file must exist */ 
+   if ((key = ftok(LOGFILE, 'R')) == -1)  /*Here the file must exist */ 
       logger(ERROR,"system call","ftok",0);
 
    /*  create the segment: */
@@ -229,8 +232,6 @@ int main(int argc, char **argv)
       logger(ERROR,"system call","shmat",0);
 
    memset(data, 0, SHMSIZE);              /* Initialise all allocated shared memory */
-
-   logger(LOG,"server starting",argv[1],getpid());
 
    /* setup the network socket */
    if((listenfd = socket(AF_INET, SOCK_STREAM,0)) <0)
