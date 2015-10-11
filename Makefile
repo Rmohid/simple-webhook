@@ -17,12 +17,14 @@ run: kill
 test:
 	./bin/client BF2BE4 mykey 
 	./bin/client AF2BE4 mykey callThis 
+	./bin/client AF2BE4 ""
 	./bin/client AF2BE4 mykey 
 	./bin/client AF2BE4 newkey 
 	./bin/client AF2BE4 newkey callThat
 	./bin/client AF2BE4 newkey changeIt
+	cat web.log
 kill:
-	ps a | grep "/bin/server 8181" | grep -v grep | cut -f1 -d' ' | xargs kill
+	ps a | grep "/bin/server 8181" | grep -v grep | cut -f1 -d' ' | xargs -t kill
 clean:
 	-rm -f *.log
 	-rm -f *.o

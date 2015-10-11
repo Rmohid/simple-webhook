@@ -25,8 +25,9 @@
 #define PORT      12345
 #define MAX_TRIGGER 32
 #define MAX_CALLBACK 256
-#define NUM_TRIGGERS 5
-#define SHMSIZE (sizeof(Trigger) * NUM_TRIGGERS + 1023 ) % 1024
+#define NUM_TRIGGERS 100
+#define SHMSIZE (sizeof(Trigger) * NUM_TRIGGERS + 1023 ) / 1024 * 1024
+#define LOGFILE "web.log"
 
 // OSX req'd
 #ifndef SIGCLD
@@ -97,7 +98,7 @@ void logger(int type, char *s1, char *s2, int socket_fd)
       case LOG: (void)sprintf(logbuffer," INFO: %s:%s:%d",s1, s2,socket_fd); break;
    }	
    /* No checks here, nothing can be done with a failure anyway */
-   if((fd = open("web.log", O_CREAT| O_WRONLY | O_APPEND,0644)) >= 0) {
+   if((fd = open(LOGFILE, O_CREAT| O_WRONLY | O_APPEND,0644)) >= 0) {
       (void)write(fd,logbuffer,strlen(logbuffer)); 
       (void)write(fd,"\n",1);      
       (void)close(fd);
@@ -143,10 +144,6 @@ void web(int fd, int hit, char *shmp)
    idx += strlen(settings[KEY_TOKEN]);
    key = idx + 1; 
 
-   if(!key){                   /* Nothing to do if no key */
-      logger(ERROR,"No key",buffer,fd);
-   }
-
    for(i=key-buffer;i<BUFSIZE;i++) { /* null terminate after next slash and index value */
       if(buffer[i] == '/' ) {
          buffer[i] = 0;
@@ -158,10 +155,14 @@ void web(int fd, int hit, char *shmp)
       }
    }
 
+   if(!strlen(key)){                   /* Nothing to do if no key */
+      logger(ERROR,"No key",buffer,fd);
+   }
+
    i = lookup(key, value, t);  /* Use shared mem for dict, get existing key value or update */
    key = t[i].trigger;
    value = t[i].callback;
-   len = strlen(t[i].callback);
+   len = strlen(value);
 
    (void)sprintf(buffer,
          "HTTP/1.1 200 OK\nServer: server/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", 
