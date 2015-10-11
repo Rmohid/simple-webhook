@@ -117,7 +117,7 @@ void web(int fd, int hit)
       logger(ERROR,"No key",buffer,fd);
    }
 
-   (void)sprintf(command,"./%s %s",key, url);
+   (void)sprintf(command,"./%s '%s'",key, url);
    (void)sprintf(buffer,
          "HTTP/1.1 200 OK\nServer: server/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", 
          VERSION, len, fstr); /* Header + a blank line */

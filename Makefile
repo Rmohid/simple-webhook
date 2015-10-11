@@ -21,6 +21,7 @@ test:
 	./bin/client AF2BE4 ""
 	./bin/client AF2BE4 script2
 	./bin/client AF2BE4 script2?one=1
+	./bin/client AF2BE4 'script2?one=1&two=2'
 	./bin/client AF2BE4 script3
 	./bin/client AF2BE4 "ls -l"
 	cat $(SPATH)/web.log
