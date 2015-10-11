@@ -13,7 +13,7 @@ server: server.o $(OBJECTS)
 	gcc -g server.o $(OBJECTS) -o bin/$@
 
 run: kill
-	./bin/server 8181 . & sleep 1
+	./bin/server 8181 . ; sleep 1
 test:
 	./bin/client BF2BE4 mykey 
 	./bin/client AF2BE4 mykey callThis 

@@ -36,6 +36,8 @@
 #define xstr(a) str(a)
 #define str(a) #a
 
+#define DEAMONIZED 
+
 enum APP_KEYS {KEY_TOKEN,KEY_PORT,KEY_LAST};
 
 char *settings [] = {
@@ -49,29 +51,31 @@ typedef struct{
 }Trigger;
 
 void dumpTriggers(Trigger *t){
+#ifndef DEAMONIZED
    int i;
    for(i = 0; i < NUM_TRIGGERS ; i++){
       printf( "%d: %s -> %s, ",i, t[i].trigger,t[i].callback);
    }
    printf("\n");
+#endif
 }
-char *lookup(char *key, char *value, Trigger *t){
+int lookup(char *key, char *value, Trigger *t){
    int i,idx = 0;
    /* Find if it's already present or first empty */
    for(i = 0; i < NUM_TRIGGERS ; i++){
       if(!strcmp(key, t[i].trigger) || (t[i].trigger[0] == 0)){
-         printf("Match %s with %s at %d\n", key, t[i].trigger, i);
          idx = i;
          break;
       }
    }
    strncpy(t[idx].trigger,key,MAX_TRIGGER);
-   if(strlen(value)){ /* registering a new trigger, save and echo it back */
+   /* registering a new trigger, save and echo it back */
+   if(strlen(value)){ 
       strncpy(t[idx].callback,value,MAX_CALLBACK);
    }
    dumpTriggers(t);
 
-   return t[idx].callback;
+   return idx;
 }
 
 void logger(int type, char *s1, char *s2, int socket_fd)
@@ -104,14 +108,14 @@ void logger(int type, char *s1, char *s2, int socket_fd)
 /* this is a child web server process, so we can exit on errors */
 void web(int fd, int hit, char *shmp)
 {
-   int j, file_fd, buflen;
+   int  file_fd, buflen;
    long i, ret, len;
-   char * fstr = "text/plain";
    char *idx, *key, *value = NULL;
-   char log[200];
+   char *fstr = "text/plain";
    static char buffer[BUFSIZE+1]; /* static so zero filled */
+   Trigger *t = (Trigger *)shmp;  /* map records into shared memory */
 
-   ret =read(fd,buffer,BUFSIZE); 	/* read Web request in one go */
+   ret =read(fd,buffer,BUFSIZE);/* read Web request in one go */
    if(ret == 0 || ret == -1) {	/* read failure stop now */
       logger(FORBIDDEN,"failed to read browser request","",fd);
    }
@@ -131,21 +135,19 @@ void web(int fd, int hit, char *shmp)
       logger(FORBIDDEN,"Only simple GET operation supported",buffer,fd);
    }
 
-   /* check for token .. */
-   idx += 5;
+   idx += 5;                   /* check for token .. */
    if( strncmp(idx,settings[KEY_TOKEN],strlen(settings[KEY_TOKEN]))){ 
       logger(FORBIDDEN,"Invalid token",idx,fd);
    }
 
-   /* Get key and null previous slash */
    idx += strlen(settings[KEY_TOKEN]);
    key = idx + 1; 
 
-   if(!key){
+   if(!key){                   /* Nothing to do if no key */
       logger(ERROR,"No key",buffer,fd);
    }
 
-   for(i=key-buffer;i<BUFSIZE;i++) { /* null terminate after next slash */
+   for(i=key-buffer;i<BUFSIZE;i++) { /* null terminate after next slash and index value */
       if(buffer[i] == '/' ) {
          buffer[i] = 0;
          value = &buffer[i + 1];
@@ -155,19 +157,19 @@ void web(int fd, int hit, char *shmp)
          break;
       }
    }
-   logger(LOG,"key:",key,hit);
-   value = lookup(key, value, (Trigger *)shmp);
-   len = strlen(value);
 
-   (void)sprintf(buffer,"HTTP/1.1 200 OK\nServer: server/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", 
+   i = lookup(key, value, t);  /* Use shared mem for dict, get existing key value or update */
+   key = t[i].trigger;
+   value = t[i].callback;
+   len = strlen(t[i].callback);
+
+   (void)sprintf(buffer,
+         "HTTP/1.1 200 OK\nServer: server/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", 
          VERSION, len, fstr); /* Header + a blank line */
 
-   logger(LOG,"Header",buffer,hit);
-   (void)write(fd,buffer,strlen(buffer));
-   bzero(buffer,BUFSIZE);
-   (void)sprintf(buffer," + Key %s value %s length %ld\n",key,value,len);
-   logger(LOG,"Payload",buffer,hit);
-   (void)write(fd,buffer,strlen(buffer));
+   for(ret = strlen(buffer); ret>0; ret -= write(fd,buffer,strlen(buffer)));
+   (void)sprintf(buffer," * Key=%s value=%s length=%ld\n\n",key,value,len);
+   for(ret = strlen(buffer); ret>0; ret -= write(fd,buffer,strlen(buffer)));
 
    sleep(1);	/* allow socket to drain before signalling the socket is closed */
    close(fd);
@@ -201,49 +203,50 @@ int main(int argc, char **argv)
       (void)printf("ERROR: Can't Change to directory %s\n",argv[2]);
       exit(4);
    }
-   /////////* Become deamon + unstopable and no zombies children (= no wait()) */
-   ////////if(fork() != 0)
-   ////////	return 0; /* parent returns OK to shell */
-   ////////(void)signal(SIGCLD, SIG_IGN); /* ignore child death */
-   ////////(void)signal(SIGHUP, SIG_IGN); /* ignore terminal hangups */
-   ////////for(i=0;i<32;i++)
-   ////////	(void)close(i);		/* close open files */
-   ////////(void)setpgrp();		/* break away from process group */
-      if ((key = ftok(argv[0], 'R')) == -1) /*Here the file must exist */ 
-    {
-        perror("ftok");
-        exit(1);
-    }
+#ifdef DEAMONIZED
+   /* Become deamon + unstopable and no zombies children (= no wait()) */
+   if(fork() != 0)
+      return 0;                         /* parent returns OK to shell */
+   (void)signal(SIGCLD, SIG_IGN);         /* ignore child death */
+   (void)signal(SIGHUP, SIG_IGN);         /* ignore terminal hangups */
+   for(i=0;i<32;i++)
+      (void)close(i);		          /* close open files */
+   (void)setpgrp();	                  /* break away from process group */
+#endif
 
-    /*  create the segment: */
-    if ((shmid = shmget(key, SHMSIZE, 0644 | IPC_CREAT)) == -1) {
-        perror("shmget");
-        exit(1);
-    }
+   /* Allocate a shared memory segment to store the dictionary */
+   if ((key = ftok(argv[0], 'R')) == -1)  /*Here the file must exist */ 
+      logger(ERROR,"system call","ftok",0);
 
-    /* attach to the segment to get a pointer to it: */
-    data = shmat(shmid, (void *)0, 0);
-    if (data == (char *)(-1)) {
-        perror("shmat");
-        exit(1);
-    }
+   /*  create the segment: */
+   if ((shmid = shmget(key, SHMSIZE, 0644 | IPC_CREAT)) == -1) 
+      logger(ERROR,"system call","shmget",0);
 
-   memset(data, 0, SHMSIZE);
+   /* attach to the segment to get a pointer to it: */
+   data = shmat(shmid, (void *)0, 0);
+   if (data == (char *)(-1)) 
+      logger(ERROR,"system call","shmat",0);
+
+   memset(data, 0, SHMSIZE);              /* Initialise all allocated shared memory */
 
    logger(LOG,"server starting",argv[1],getpid());
+
    /* setup the network socket */
    if((listenfd = socket(AF_INET, SOCK_STREAM,0)) <0)
       logger(ERROR, "system call","socket",0);
    port = atoi(argv[1]);
    if(port < 0 || port >60000)
       logger(ERROR,"Invalid port number (try 1->60000)",argv[1],0);
+
    serv_addr.sin_family = AF_INET;
    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
    serv_addr.sin_port = htons(port);
+
    if(bind(listenfd, (struct sockaddr *)&serv_addr,sizeof(serv_addr)) <0)
       logger(ERROR,"system call","bind",0);
    if( listen(listenfd,64) <0)
       logger(ERROR,"system call","listen",0);
+
    for(hit=1; ;hit++) {
       length = sizeof(cli_addr);
       if((socketfd = accept(listenfd, (struct sockaddr *)&cli_addr, &length)) < 0)
@@ -252,17 +255,16 @@ int main(int argc, char **argv)
          logger(ERROR,"system call","fork",0);
       }
       else {
-         if(pid == 0) { 	/* child */
+         if(pid == 0) {             /* child */
             (void)close(listenfd);
             web(socketfd,hit,data); /* never returns */
-         } else { 	/* parent */
+         } else { 	            /* parent */
             (void)close(socketfd);
          }
       }
    }
-       /* detach from the segment: */
-    if (shmdt(data) == -1) {
-        perror("shmdt");
-        exit(1);
-    }
+
+   if (shmdt(data) == -1) {        /* detach from the segment if parent */
+      logger(ERROR,"system call","shmdt",0);
+   }
 }

@@ -51,7 +51,7 @@ main(int argc, char **argv)
       pexit("connect() failed");
 
    /* Now the sockfd can be used to communicate to the server the GET request */
-   printf("Client sent bytes=%u %s\nResponse:\n",strlen(command), command);
+   printf("Client sent bytes=%d %s\nResponse:\n",(int)strlen(command), command);
    write(sockfd, command, strlen(command));
 
    /* This displays the raw HTML file (if index.html) as received by the browser */
