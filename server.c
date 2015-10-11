@@ -11,9 +11,6 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-// For shared memory
-#include <sys/ipc.h>
-#include <sys/shm.h>
 
 #define VERSION 1
 #define BUFSIZE 8096
@@ -21,63 +18,21 @@
 #define LOG        44
 #define FORBIDDEN 403
 #define NOTFOUND  404
-#define TOKEN     AF2BE4
-#define PORT      12345
-#define MAX_TRIGGER 32
-#define MAX_CALLBACK 256
-#define NUM_TRIGGERS 100
-#define SHMSIZE (sizeof(Trigger) * NUM_TRIGGERS + 1023 ) / 1024 * 1024
 #define LOGFILE "web.log"
+#define SETTING_MAX 80
+#define COMMAND_MAX 200
+#define TOKEN   "AF2BE4"
 
 // OSX req'd
 #ifndef SIGCLD
 # define SIGCLD SIGCHLD
 #endif
 
-#define xstr(a) str(a)
-#define str(a) #a
-
 #define DEAMONIZED 
 
 enum APP_KEYS {KEY_TOKEN,KEY_PORT,KEY_LAST};
-
-char *settings [] = {
-   [KEY_TOKEN]=xstr(TOKEN),  
-   [KEY_PORT]=xstr(PORT),  
-   [KEY_LAST]=NULL };
-
-typedef struct{
-   char trigger[MAX_TRIGGER];
-   char callback[MAX_CALLBACK];
-}Trigger;
-
-void dumpTriggers(Trigger *t){
-#ifndef DEAMONIZED
-   int i;
-   for(i = 0; i < NUM_TRIGGERS ; i++){
-      printf( "%d: %s -> %s, ",i, t[i].trigger,t[i].callback);
-   }
-   printf("\n");
-#endif
-}
-int lookup(char *key, char *value, Trigger *t){
-   int i,idx = 0;
-   /* Find if it's already present or first empty */
-   for(i = 0; i < NUM_TRIGGERS ; i++){
-      if(!strcmp(key, t[i].trigger) || (t[i].trigger[0] == 0)){
-         idx = i;
-         break;
-      }
-   }
-   strncpy(t[idx].trigger,key,MAX_TRIGGER);
-   /* registering a new trigger, save and echo it back */
-   if(strlen(value)){ 
-      strncpy(t[idx].callback,value,MAX_CALLBACK);
-   }
-   dumpTriggers(t);
-
-   return idx;
-}
+char *settings [KEY_LAST];
+char bufSettings[KEY_LAST * SETTING_MAX];
 
 void logger(int type, char *s1, char *s2, int socket_fd)
 {
@@ -107,14 +62,14 @@ void logger(int type, char *s1, char *s2, int socket_fd)
 }
 
 /* this is a child web server process, so we can exit on errors */
-void web(int fd, int hit, char *shmp)
+void web(int fd, int hit)
 {
    int  file_fd, buflen;
    long i, ret, len;
-   char *idx, *key, *value = NULL;
+   char *idx, *key, *url = "";
    char *fstr = "text/plain";
    static char buffer[BUFSIZE+1]; /* static so zero filled */
-   Trigger *t = (Trigger *)shmp;  /* map records into shared memory */
+   static char command[COMMAND_MAX];
 
    ret =read(fd,buffer,BUFSIZE);/* read Web request in one go */
    if(ret == 0 || ret == -1) {	/* read failure stop now */
@@ -144,10 +99,13 @@ void web(int fd, int hit, char *shmp)
    idx += strlen(settings[KEY_TOKEN]);
    key = idx + 1; 
 
-   for(i=key-buffer;i<BUFSIZE;i++) { /* null terminate after next slash and index value */
-      if(buffer[i] == '/' ) {
+   for(i=key-buffer;i<BUFSIZE;i++) { /* null terminate slashes and semicolons */
+      if((buffer[i] == '/' ) || (buffer[i] == ';')){
          buffer[i] = 0;
-         value = &buffer[i + 1];
+      }
+      if(buffer[i] == '?' ){ /* Pass GET arguments to script */
+         buffer[i] = 0;
+         url = &buffer[i + 1];
       }
       if(buffer[i] == ' ') { /* Ignore rest of url, string is "GET URL " +lots of other stuff */
          buffer[i] = 0;
@@ -159,19 +117,13 @@ void web(int fd, int hit, char *shmp)
       logger(ERROR,"No key",buffer,fd);
    }
 
-   i = lookup(key, value, t);  /* Use shared mem for dict, get existing key value or update */
-   key = t[i].trigger;
-   value = t[i].callback;
-   len = strlen(value);
-
+   (void)sprintf(command,"./%s %s",key, url);
    (void)sprintf(buffer,
          "HTTP/1.1 200 OK\nServer: server/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", 
          VERSION, len, fstr); /* Header + a blank line */
 
    for(ret = strlen(buffer); ret>0; ret -= write(fd,buffer,strlen(buffer)));
-   (void)sprintf(buffer,"./%s",value);
-   ret =system(buffer);
-   (void)sprintf(buffer," %s, exit with %d\n\n",value,(int)ret);
+   (void)sprintf(buffer," %s, exit with %d\n\n",command,(short)system(command));
    for(ret = strlen(buffer); ret>0; ret -= write(fd,buffer,strlen(buffer)));
 
    sleep(1);	/* allow socket to drain before signalling the socket is closed */
@@ -181,20 +133,26 @@ void web(int fd, int hit, char *shmp)
 
 int main(int argc, char **argv)
 {
-   int i, shmid, port, pid, listenfd, socketfd, hit;
-   key_t key;
-   char *data;
+   int i, port, pid, listenfd, socketfd, hit;
    socklen_t length;
    static struct sockaddr_in cli_addr; /* static = initialised to zeros */
    static struct sockaddr_in serv_addr; /* static = initialised to zeros */
 
-   if( argc < 3  || argc > 3 || !strcmp(argv[1], "-?") ) {
-      (void)printf("hint: server Port-Number Top-Directory\t\tversion %d\n\n"
+   if( argc < 3  || argc > 4 || !strcmp(argv[1], "-?") ) {
+      (void)printf("hint: server Port-Number Top-Directory [Token]\t\tversion %d\n\n"
             "\tserver is a small and very safe mini web server\n"
             "\tThere is no fancy features = safe and secure.\n\n"
-            "\tExample: server 8181 /home/serverdir &\n\n", VERSION);
+            "\tExample: server 8181 /home/servescripts ABC123 &\n\n", VERSION);
       exit(0);
    }
+
+   for(i=0;i<KEY_LAST;i++){
+      settings[i] = &bufSettings[i* SETTING_MAX];
+   }
+   strncpy(settings[KEY_PORT],argv[1],SETTING_MAX);
+   strncpy(settings[KEY_TOKEN],TOKEN,SETTING_MAX);
+   if(argc == 4)
+      strncpy(settings[KEY_TOKEN],argv[3],SETTING_MAX);
    if( !strncmp(argv[2],"/"   ,2 ) || !strncmp(argv[2],"/etc", 5 ) ||
          !strncmp(argv[2],"/bin",5 ) || !strncmp(argv[2],"/lib", 5 ) ||
          !strncmp(argv[2],"/tmp",5 ) || !strncmp(argv[2],"/usr", 5 ) ||
@@ -216,29 +174,14 @@ int main(int argc, char **argv)
       (void)close(i);		          /* close open files */
    (void)setpgrp();	                  /* break away from process group */
 #endif
-   logger(LOG,"server starting",argv[1],getpid());
-
-   /* Allocate a shared memory segment to store the dictionary */
-   if ((key = ftok(LOGFILE, 'R')) == -1)  /*Here the file must exist */ 
-      logger(ERROR,"system call","ftok",0);
-
-   /*  create the segment: */
-   if ((shmid = shmget(key, SHMSIZE, 0644 | IPC_CREAT)) == -1) 
-      logger(ERROR,"system call","shmget",0);
-
-   /* attach to the segment to get a pointer to it: */
-   data = shmat(shmid, (void *)0, 0);
-   if (data == (char *)(-1)) 
-      logger(ERROR,"system call","shmat",0);
-
-   memset(data, 0, SHMSIZE);              /* Initialise all allocated shared memory */
+   logger(LOG,"server starting",settings[KEY_TOKEN],getpid());
 
    /* setup the network socket */
    if((listenfd = socket(AF_INET, SOCK_STREAM,0)) <0)
       logger(ERROR, "system call","socket",0);
-   port = atoi(argv[1]);
+   port = atoi(settings[KEY_PORT]);
    if(port < 0 || port >60000)
-      logger(ERROR,"Invalid port number (try 1->60000)",argv[1],0);
+      logger(ERROR,"Invalid port number (try 1->60000)",settings[KEY_PORT],0);
 
    serv_addr.sin_family = AF_INET;
    serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -259,14 +202,10 @@ int main(int argc, char **argv)
       else {
          if(pid == 0) {             /* child */
             (void)close(listenfd);
-            web(socketfd,hit,data); /* never returns */
+            web(socketfd,hit); /* never returns */
          } else { 	            /* parent */
             (void)close(socketfd);
          }
       }
-   }
-
-   if (shmdt(data) == -1) {        /* detach from the segment if parent */
-      logger(ERROR,"system call","shmdt",0);
    }
 }
