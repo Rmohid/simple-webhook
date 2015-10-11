@@ -1,0 +1,2 @@
+echo '   *** THIS IS SCRIPT 2 *** '
+ps -a

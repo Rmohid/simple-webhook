@@ -1,5 +1,5 @@
-HEADERS = simple.h
-OBJECTS = common.o
+HEADERS = 
+OBJECTS = 
 SPATH = ./bin/script
 
 default: clean client server run test kill

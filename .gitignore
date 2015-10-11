@@ -1,5 +1,6 @@
-*bin/
 *log
+client
+server
 # Object files
 *.o
 *.ko

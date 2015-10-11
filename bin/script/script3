@@ -1,0 +1,2 @@
+echo this script should not be executable | wall
+
