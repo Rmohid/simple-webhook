@@ -20,7 +20,7 @@
 #define NOTFOUND  404
 #define LOGFILE "web.log"
 #define SETTING_MAX 80
-#define COMMAND_MAX 200
+#define LINE_MAX 200
 #define TOKEN   "AF2BE4"
 
 // OSX req'd
@@ -68,19 +68,23 @@ void web(int fd, int hit)
    long i, ret, len;
    char *idx, *key, *url = "";
    char *fstr = "text/plain";
-   static char buffer[BUFSIZE+1]; /* static so zero filled */
-   static char command[COMMAND_MAX];
+   static char buffer[BUFSIZE+1]; 
+   static char header[LINE_MAX];
+   static char command[LINE_MAX];
 
-   ret =read(fd,buffer,BUFSIZE);/* read Web request in one go */
-   if(ret == 0 || ret == -1) {	/* read failure stop now */
+   /* read Web request in one go */
+   ret =read(fd,buffer,BUFSIZE);
+   if(ret == 0 || ret == -1) {	
       logger(FORBIDDEN,"failed to read browser request","",fd);
    }
 
-   if(ret > 0 && ret < BUFSIZE)	/* return code is valid chars */
+   /* return code is valid chars */
+   if(ret > 0 && ret < BUFSIZE)	
       buffer[ret]=0;		/* terminate the buffer */
    else buffer[0]=0;
 
-   for(i=0;i<ret;i++)	        /* remove CF and LF characters */
+   /* remove CF and LF characters */
+   for(i=0;i<ret;i++)	
       if(buffer[i] == '\r' || buffer[i] == '\n')
          buffer[i]='*';
 
@@ -91,7 +95,8 @@ void web(int fd, int hit)
       logger(FORBIDDEN,"Only simple GET operation supported",buffer,fd);
    }
 
-   idx += 5;                   /* check for token .. */
+   idx += 5;                   
+   /* check for token .. */
    if( strncmp(idx,settings[KEY_TOKEN],strlen(settings[KEY_TOKEN]))){ 
       logger(FORBIDDEN,"Invalid token",idx,fd);
    }
@@ -99,31 +104,40 @@ void web(int fd, int hit)
    idx += strlen(settings[KEY_TOKEN]);
    key = idx + 1; 
 
-   for(i=key-buffer;i<BUFSIZE;i++) { /* null terminate slashes and semicolons */
+   /* null terminate slashes and semicolons */
+   for(i=key-buffer;i<BUFSIZE;i++) { 
       if((buffer[i] == '/' ) || (buffer[i] == ';')){
          buffer[i] = 0;
       }
-      if(buffer[i] == '?' ){ /* Pass GET arguments to script */
+      /* Pass GET arguments to script */
+      if(buffer[i] == '?' ){ 
          buffer[i] = 0;
          url = &buffer[i + 1];
       }
-      if(buffer[i] == ' ') { /* Ignore rest of url, string is "GET URL " +lots of other stuff */
+      /* Ignore rest of url */
+      if(buffer[i] == ' ') { 
          buffer[i] = 0;
          break;
       }
    }
 
-   if(!strlen(key)){                   /* Nothing to do if no key */
+   /* Nothing to do if no key */
+   if(!strlen(key)){                   
       logger(ERROR,"No key",buffer,fd);
    }
 
    (void)sprintf(command,"./%s '%s'",key, url);
-   (void)sprintf(buffer,
-         "HTTP/1.1 200 OK\nServer: server/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", 
-         VERSION, len, fstr); /* Header + a blank line */
-
-   for(ret = strlen(buffer); ret>0; ret -= write(fd,buffer,strlen(buffer)));
+   /* Header + a blank line */
    (void)sprintf(buffer," %s, exit with %d\n\n",command,(short)system(command));
+   (void)sprintf(header,
+         "HTTP/1.1 200 OK\nServer: server/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", 
+         VERSION, strlen(buffer), fstr); 
+#ifdef DEBUG
+    logger(LOG,"Header: ",header,fd);
+    logger(LOG,"Buffer: ",buffer,fd);
+#endif
+
+   for(ret = strlen(header); ret>0; ret -= write(fd,header,strlen(header)));
    for(ret = strlen(buffer); ret>0; ret -= write(fd,buffer,strlen(buffer)));
 
    sleep(1);	/* allow socket to drain before signalling the socket is closed */
@@ -202,7 +216,7 @@ int main(int argc, char **argv)
       else {
          if(pid == 0) {             /* child */
             (void)close(listenfd);
-            web(socketfd,hit); /* never returns */
+            web(socketfd,hit);      /* never returns */
          } else { 	            /* parent */
             (void)close(socketfd);
          }

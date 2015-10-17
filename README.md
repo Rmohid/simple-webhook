@@ -6,4 +6,4 @@ Run webhook on a target host and provide a path with executable target scripts. 
 ## Usage
    webhook PORT PATH [token]
    
-   and curl http://hostIp:PORT/token/script to trigger
+   and curl 'host:PORT/token/script?arg1&arg2' to trigger

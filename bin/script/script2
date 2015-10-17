@@ -1,2 +1,6 @@
 echo '   *** THIS IS SCRIPT 2 *** '
+# This is obviously not secure, testing only
 echo args are: $*
+parsed=$(IFS='?&';echo $*)
+echo parsed: $parsed
+`echo $parsed`

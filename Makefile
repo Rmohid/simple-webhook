@@ -16,14 +16,14 @@ server: server.o $(OBJECTS)
 run: kill
 	./bin/webhook 8181 $(SPATH) &  sleep 1
 test:
-	./bin/client BF2BE4 script1 
-	./bin/client AF2BE4 script1
-	./bin/client AF2BE4 ""
-	./bin/client AF2BE4 script2
-	./bin/client AF2BE4 script2?one=1
-	./bin/client AF2BE4 'script2?one=1&two=2'
-	./bin/client AF2BE4 script3
-	./bin/client AF2BE4 "ls -l"
+	./bin/client localhost 8181 BF2BE4 script1 
+	./bin/client localhost 8181 AF2BE4 script1
+	./bin/client localhost 8181 AF2BE4 ""
+	./bin/client localhost 8181 AF2BE4 script2
+	./bin/client localhost 8181 AF2BE4 'script2?ps&-a'
+	./bin/client localhost 8181 AF2BE4 script3
+	curl 'localhost:8181/AF2BE4/script1'
+	curl 'localhost:8181/AF2BE4/script2?echo&this&is&curl'
 	cat $(SPATH)/web.log
 kill:
 	ps a | grep "/bin/webhook 8181" | grep -v grep | cut -f1 -d' ' | xargs -t kill

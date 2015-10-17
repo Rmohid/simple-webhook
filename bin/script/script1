@@ -1,1 +1,1 @@
-echo "  ** THIS IS SCRIPT 1 **" | wall
+echo "  ** THIS IS SCRIPT 1 **" 
