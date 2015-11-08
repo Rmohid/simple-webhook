@@ -1,4 +1,3 @@
 #! /usr/bin/perl
 print "   *** THIS IS SCRIPT 4 *** \n";
-# This is obviously not secure, testing only
-print " args are: @ARGV\n";
+print `echo @ARGV > /tmp/received.json`;

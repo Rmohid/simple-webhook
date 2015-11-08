@@ -22,15 +22,14 @@ test:
 	curl 'localhost:8181/webhook/AC2BE5/script2?echo&this&is&curl'
 	curl --data 'postdata1=valid&param2=value2' localhost:8181/webhook/AC2BE5/script2
 	curl -H "Content-Type: application/json" -X POST -d '{"username":"xyz","password":"xyz"}' http://localhost:8181/webhook/AC2BE5/script4
-	curl -H "Content-Type: application/json" --data @sample.json http://localhost:8181/webhook/AC2BE5/script4
 
 
 	cat $(SPATH)/web.log
 kill:
-	ps a | grep "/bin/webhook 8181" | grep -v grep | cut -f1 -ds | xargs -t kill
+	pkill AC2BE5 || true
 
 clean: kill
 	rm -f $(SPATH)/*.log
 	rm -f *.o
-	find bin/ -type f| grep -v script |xargs rm
+	find bin/ -type f| grep -v script |xargs rm || true
 

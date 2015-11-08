@@ -70,7 +70,7 @@ void web(int fd, int hit)
    char *fstr = "text/plain";
    static char buffer[BUFSIZE+1]; 
    static char header[LINE_MAX];
-   static char command[LINE_MAX];
+   static char command[BUFSIZE];
 
    /* read Web request in one go */
    ret =read(fd,buffer,BUFSIZE);
