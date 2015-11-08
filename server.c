@@ -64,7 +64,7 @@ void logger(int type, char *s1, char *s2, int socket_fd)
 /* this is a child web server process, so we can exit on errors */
 void web(int fd, int hit)
 {
-   int  file_fd, buflen;
+   int  file_fd, buflen,method;
    long i, ret, len;
    char *idx, *key, *url = "";
    char *fstr = "text/plain";
@@ -91,39 +91,55 @@ void web(int fd, int hit)
    logger(LOG,"request",buffer,hit);
 
    idx = buffer;
-   if( strncmp(idx,"GET ",4) && strncmp(idx,"get ",4) ) {
-      logger(FORBIDDEN,"Only simple GET operation supported",buffer,fd);
+   if( strncmp(idx,"GET ",4) && strncmp(idx,"get ",4) && strncmp(idx,"POST ",5) && strncmp(idx,"post ",5) ){
+      logger(FORBIDDEN,"Only simple POST and GET requests supported",buffer,fd);
    }
 
-   idx += 5;                   
    /* check for token .. */
+   idx = strstr(buffer," /") + 2;
    if( strncmp(idx,settings[KEY_TOKEN],strlen(settings[KEY_TOKEN]))){ 
       logger(FORBIDDEN,"Invalid token",idx,fd);
    }
 
    idx += strlen(settings[KEY_TOKEN]);
    key = idx + 1; 
-
-   /* null terminate slashes and semicolons */
-   for(i=key-buffer;i<BUFSIZE;i++) { 
-      if((buffer[i] == '/' ) || (buffer[i] == ';')){
-         buffer[i] = 0;
-      }
-      /* Pass GET arguments to script */
-      if(buffer[i] == '?' ){ 
-         buffer[i] = 0;
-         url = &buffer[i + 1];
-      }
-      /* Ignore rest of url */
-      if(buffer[i] == ' ') { 
-         buffer[i] = 0;
-         break;
-      }
-   }
+   idx = strstr(buffer,"HTTP/");
+   *(idx-1) = 0;
 
    /* Nothing to do if no key */
    if(!strlen(key)){                   
       logger(ERROR,"No key",buffer,fd);
+   }
+
+   if( 0 == (strncmp(buffer,"POST ",5) && strncmp(buffer,"post ",5)) ) {
+      /* Only support non-multipart post requests */
+      idx = strstr(idx,"****");
+      if(idx){
+         url = idx + 4;
+      }else{
+         logger(ERROR,"failed to read POST request",buffer,ret);
+      }
+
+   }else{
+      /* It's a get request and already loaded */
+      idx += 5;                   
+
+      /* null terminate slashes and semicolons */
+      for(i=key-buffer;i<BUFSIZE;i++) { 
+         if((buffer[i] == '/' ) || (buffer[i] == ';')){
+            buffer[i] = 0;
+         }
+         /* Pass GET arguments to script */
+         if(buffer[i] == '?' ){ 
+            buffer[i] = 0;
+            url = &buffer[i + 1];
+         }
+         /* Ignore rest of url */
+         if(buffer[i] == ' ') { 
+            buffer[i] = 0;
+            break;
+         }
+      }
    }
 
    (void)sprintf(command,"./%s '%s'",key, url);

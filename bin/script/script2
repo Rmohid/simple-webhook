@@ -3,4 +3,3 @@ echo '   *** THIS IS SCRIPT 2 *** '
 echo args are: $*
 parsed=$(IFS='?&';echo $*)
 echo parsed: $parsed
-`echo $parsed`
