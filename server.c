@@ -87,6 +87,9 @@ void web(int fd, int hit)
    for(i=0;i<ret;i++)	
       if(buffer[i] == '\r' || buffer[i] == '\n')
          buffer[i]='*';
+   /* make it shell safe */
+      if(buffer[i] == '\'')
+         buffer[i]='"';
 
    logger(LOG,"request",buffer,hit);
 
