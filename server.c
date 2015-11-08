@@ -99,7 +99,7 @@ void web(int fd, int hit)
    }
 
    /* check for token .. */
-   idx = strstr(buffer," /") + 2;
+   idx = strstr(buffer,"/webhook/") + 9;
    if( strncmp(idx,settings[KEY_TOKEN],strlen(settings[KEY_TOKEN]))){ 
       logger(FORBIDDEN,"Invalid token",idx,fd);
    }
