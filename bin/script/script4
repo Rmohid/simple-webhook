@@ -1,3 +1,13 @@
-#! /usr/bin/perl
-print "   *** THIS IS SCRIPT 4 *** \n";
-print `echo @ARGV > /tmp/received.json`;
+#! /usr/bin/python
+import sys,json
+import pprint as p
+
+with open('/tmp/in.json', 'w') as the_file:
+     the_file.write(sys.argv[1])
+
+data = json.loads(sys.argv[1])
+
+with open('/tmp/out.json', 'w') as the_file:
+     the_file.write( p.pformat(data))
+
+

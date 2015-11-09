@@ -20,7 +20,7 @@
 #define NOTFOUND  404
 #define LOGFILE "web.log"
 #define SETTING_MAX 80
-#define LINE_MAX 200
+#define LINE_MAX 600
 #define TOKEN   "AF2BE4"
 
 // OSX req'd
@@ -69,8 +69,7 @@ void web(int fd, int hit)
    char *idx, *key, *url = "";
    char *fstr = "text/plain";
    static char buffer[BUFSIZE+1]; 
-   static char header[LINE_MAX];
-   static char command[BUFSIZE];
+   static char header[BUFSIZE];
 
    /* read Web request in one go */
    ret =read(fd,buffer,BUFSIZE);
@@ -145,19 +144,20 @@ void web(int fd, int hit)
       }
    }
 
-   (void)sprintf(command,"./%s '%s'",key, url);
+   (void)sprintf(header,"./%s '%s' > /dev/null",key, url);
    /* Header + a blank line */
-   (void)sprintf(buffer," %s, exit with %d\n\n",command,(short)system(command));
+   (void)sprintf(buffer," %s, exit with %d\n\n",header,(short)system(header));
    (void)sprintf(header,
          "HTTP/1.1 200 OK\nServer: server/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", 
          VERSION, strlen(buffer), fstr); 
+    strncat(header,buffer,sizeof(header));
 #ifdef DEBUG
-    logger(LOG,"Header: ",header,fd);
+    logger(LOG,"Header: ",command,fd);
     logger(LOG,"Buffer: ",buffer,fd);
 #endif
 
    for(ret = strlen(header); ret>0; ret -= write(fd,header,strlen(header)));
-   for(ret = strlen(buffer); ret>0; ret -= write(fd,buffer,strlen(buffer)));
+   //for(ret = strlen(buffer); ret>0; ret -= write(fd,buffer,strlen(buffer)));
 
    sleep(1);	/* allow socket to drain before signalling the socket is closed */
    close(fd);

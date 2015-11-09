@@ -15,6 +15,7 @@ server: server.o $(OBJECTS)
 
 run: kill server
 	./bin/webhook 8181 $(SPATH) AC2BE5 &  sleep 1
+	ps -ef | grep 'AC2BE5$$'
 test:
 	./bin/client localhost 8181 webhook/BF2BE4 script1 
 	./bin/client localhost 8181 webhook/AC2BE5 script1
@@ -22,11 +23,8 @@ test:
 	curl 'localhost:8181/webhook/AC2BE5/script2?echo&this&is&curl'
 	curl --data 'postdata1=valid&param2=value2' localhost:8181/webhook/AC2BE5/script2
 	curl -H "Content-Type: application/json" -X POST -d '{"username":"xyz","password":"xyz"}' http://localhost:8181/webhook/AC2BE5/script4
-
-
-	cat $(SPATH)/web.log
 kill:
-	pkill AC2BE5 || true
+	`ps -aeo pid,command | awk '/AC2BE5$$/{system("kill -9 " $$1)}' ` || true
 
 clean: kill
 	rm -f $(SPATH)/*.log
