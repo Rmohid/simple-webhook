@@ -123,7 +123,7 @@ void web(int fd, int hit)
       }
 
    }else{
-      /* It's a get request and already loaded */
+      /* It's a get request */
       idx += 5;                   
 
       /* null terminate slashes and semicolons */
@@ -144,11 +144,13 @@ void web(int fd, int hit)
       }
    }
 
+   /* pass the payload as arguments to the shell script */
    (void)sprintf(header,"./%s '%s' > /dev/null",key, url);
-   /* Header + a blank line */
    (void)sprintf(buffer," %s, exit with %d\n\n",header,(short)system(header));
+
+   /* Header + a blank line */
    (void)sprintf(header,
-         "HTTP/1.1 200 OK\nServer: server/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", 
+         "HTTP/1.1 200 OK\nServer: webhook/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", 
          VERSION, strlen(buffer), fstr); 
     strncat(header,buffer,sizeof(header));
 #ifdef DEBUG
@@ -157,7 +159,6 @@ void web(int fd, int hit)
 #endif
 
    for(ret = strlen(header); ret>0; ret -= write(fd,header,strlen(header)));
-   //for(ret = strlen(buffer); ret>0; ret -= write(fd,buffer,strlen(buffer)));
 
    sleep(1);	/* allow socket to drain before signalling the socket is closed */
    close(fd);
@@ -173,9 +174,9 @@ int main(int argc, char **argv)
 
    if( argc < 3  || argc > 4 || !strcmp(argv[1], "-?") ) {
       (void)printf("hint: server Port-Number Top-Directory [Token]\t\tversion %d\n\n"
-            "\tserver is a small and very safe mini web server\n"
-            "\tThere is no fancy features = safe and secure.\n\n"
-            "\tExample: server 8181 /home/servescripts ABC123 &\n\n", VERSION);
+            "\twebhook is a mini web server desinged to handle github's webhooks\n"
+            "\tThere are no fancy features = safe and secure.\n\n"
+            "\tExample: webhook 8181 /home/webhook/scripts ABC123 &\n\n", VERSION);
       exit(0);
    }
 
