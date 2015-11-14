@@ -2,12 +2,18 @@
 import os,sys,json
 import pprint as p
 
-with open('/tmp/in.json', 'w') as the_file:
-     the_file.write(sys.argv[1])
+try:
+	data = json.loads(sys.argv[1])
+except:
+	with open('/tmp/bad.json', 'w') as the_file:
+	     the_file.write(sys.argv[1])
+        sys.exit(1)
 
-data = json.loads(sys.argv[1])
-
-msg = "push made by %s" % (data['pusher']['name'])
-os.system("echo %s | wall" % msg)
+try:
+	msg = "push made by %s" % (data['pusher']['name'])
+	os.system("echo %s | wall" % msg)
+except:
+	with open('/tmp/out.json', 'w') as the_file:
+	     the_file.write(data)
 
 

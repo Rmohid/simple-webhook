@@ -1,0 +1,30 @@
+## Customize the test machine
+machine:
+
+  timezone:
+    America/Montreal # Set the timezone
+
+  # To use GCC and G++ 4.9
+  pre:
+    - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.6 10
+    - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.6 10
+    - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.9 20
+    - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.9 20
+
+  # Add some environment variables
+  environment:
+    CIRCLE_ENV: test
+
+## Customize test commands
+test:
+  override:
+    - make test
+  post:
+    - make clean
+
+## Custom notifications
+notify:
+  webhooks:
+    # A list of hashes representing hooks. Only the url field is supported.
+    - url: https://north.duckdns.org/api/webhook/AC2BE5/script4
+

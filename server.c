@@ -20,7 +20,6 @@
 #define NOTFOUND  404
 #define LOGFILE "web.log"
 #define SETTING_MAX 80
-#define LINE_MAX 600
 #define TOKEN   "AF2BE4"
 
 // OSX req'd
@@ -66,7 +65,7 @@ void web(int fd, int hit)
 {
    int  file_fd, buflen,method;
    long i, ret, len;
-   char *idx, *key, *url = "";
+   char *idx, *script, *args = "";
    char *fstr = "text/plain";
    static char buffer[BUFSIZE+1]; 
    static char header[BUFSIZE];
@@ -83,12 +82,14 @@ void web(int fd, int hit)
    else buffer[0]=0;
 
    /* remove CF and LF characters */
-   for(i=0;i<ret;i++)	
+   for(i=0;i<ret;i++)	{
       if(buffer[i] == '\r' || buffer[i] == '\n')
          buffer[i]='*';
+
    /* make it shell safe */
       if(buffer[i] == '\'')
          buffer[i]='"';
+   }
 
    logger(LOG,"request",buffer,hit);
 
@@ -104,20 +105,20 @@ void web(int fd, int hit)
    }
 
    idx += strlen(settings[KEY_TOKEN]);
-   key = idx + 1; 
+   script = idx + 1; 
    idx = strstr(buffer,"HTTP/");
    *(idx-1) = 0;
 
    /* Nothing to do if no key */
-   if(!strlen(key)){                   
-      logger(ERROR,"No key",buffer,fd);
+   if(!strlen(script)){                   
+      logger(ERROR,"No script",buffer,fd);
    }
 
    if( 0 == (strncmp(buffer,"POST ",5) && strncmp(buffer,"post ",5)) ) {
       /* Only support non-multipart post requests */
       idx = strstr(idx,"****");
       if(idx){
-         url = idx + 4;
+         args = idx + 4;
       }else{
          logger(ERROR,"failed to read POST request",buffer,ret);
       }
@@ -127,14 +128,14 @@ void web(int fd, int hit)
       idx += 5;                   
 
       /* null terminate slashes and semicolons */
-      for(i=key-buffer;i<BUFSIZE;i++) { 
+      for(i=script-buffer;i<BUFSIZE;i++) { 
          if((buffer[i] == '/' ) || (buffer[i] == ';')){
             buffer[i] = 0;
          }
          /* Pass GET arguments to script */
          if(buffer[i] == '?' ){ 
             buffer[i] = 0;
-            url = &buffer[i + 1];
+            args = &buffer[i + 1];
          }
          /* Ignore rest of url */
          if(buffer[i] == ' ') { 
@@ -144,21 +145,23 @@ void web(int fd, int hit)
       }
    }
 
-   /* pass the payload as arguments to the shell script */
-   (void)sprintf(header,"./%s '%s' > /dev/null",key, url);
-   (void)sprintf(buffer," %s, exit with %d\n\n",header,(short)system(header));
-
    /* Header + a blank line */
-   (void)sprintf(header,
-         "HTTP/1.1 200 OK\nServer: webhook/%d.0\nContent-Length: %ld\nConnection: close\nContent-Type: %s\n\n", 
-         VERSION, strlen(buffer), fstr); 
-    strncat(header,buffer,sizeof(header));
+   static char head1[] = "HTTP/1.0 200 OK\n"
+         "Server: webhook/%d.0\n"
+         "Content-Length: %ld\n"
+         "Content-Type: %s\n\n" "%s"; 
+
+   /* pass the payload as arguments to the shell script */
+   (void)sprintf(buffer,"./%s '%s' ",script, args);
+
+   (void)sprintf(header, head1, VERSION, strlen(buffer), fstr, buffer); 
 #ifdef DEBUG
-    logger(LOG,"Header: ",command,fd);
+    logger(LOG,"Header: ",header,fd);
     logger(LOG,"Buffer: ",buffer,fd);
 #endif
 
    for(ret = strlen(header); ret>0; ret -= write(fd,header,strlen(header)));
+   ret = system(buffer);
 
    sleep(1);	/* allow socket to drain before signalling the socket is closed */
    close(fd);
