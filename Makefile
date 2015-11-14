@@ -24,7 +24,7 @@ test: client run
 	curl 'localhost:8181/webhook/$(TOKEN)/script3'
 	curl 'localhost:8181/webhook/$(TOKEN)/script2?echo&this&is&curl'
 	curl --data 'postdata1=valid&param2=value2' localhost:8181/webhook/$(TOKEN)/script2
-	curl -H "Content-Type: application/json" -X POST -d '{"pusher":{"name":"Jimmy"}}' http://192.168.1.119:8181/webhook/AC2BE5/script4
+	curl -H "Content-Type: application/json" -X POST -d '{"pusher":{"name":"Jimmy"}}' http://localhost:8181/webhook/AC2BE5/script4
 
 kill:
 	`ps -aeo pid,command | awk '/$(TOKEN)$$/{system("kill -9 " $$1)}' ` || true
