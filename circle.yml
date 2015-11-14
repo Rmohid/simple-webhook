@@ -23,5 +23,5 @@ test:
 notify:
   webhooks:
     # A list of hashes representing hooks. Only the url field is supported.
-    - url: https://north.duckdns.org/api/webhook/AC2BE5/script4
+    - url: https://north.duckdns.org:8181/api/webhook/AC2BE5/script4
 
