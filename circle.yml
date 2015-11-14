@@ -1,9 +1,6 @@
 ## Customize the test machine
 machine:
 
-  timezone:
-    America/Montreal # Set the timezone
-
   # To use GCC and G++ 4.9
   pre:
     - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.6 10
